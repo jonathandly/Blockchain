@@ -86,8 +86,6 @@ class Blockchain(object):
     def last_block(self):
         return self.chain[-1]
 
-    
-
     @staticmethod
     def valid_proof(block_string, proof):
         """
@@ -131,8 +129,9 @@ def mine():
 
     if proof is None or id is None:
         response = {
-            'error_400'
+            'message': 'ERROR 400, missing either proof or id.'
         }
+        return jsonify(response), 400
  
     response = {
         # TODO: Send a JSON response with the new block
