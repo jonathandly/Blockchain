@@ -41,11 +41,12 @@ class Blockchain(object):
         }
 
         # Reset the current list of transactions
-        # Append the chain to the block
-        # Return the new block
         self.current_transactions = []
+
+        # Append the chain to the block
         self.chain.append(block)
 
+        # Return the new block
         return block
 
     def hash(self, block):
@@ -104,9 +105,25 @@ class Blockchain(object):
         
         hash_value = hashlib.sha256(guess).hexdigest()
 
-        return hash_value[:6] == '000000'
+        return hash_value[:3] == '000'
         # return True or False
 
+    def new_transaction(self, sender, recipient, amount):
+        """
+        Creates a new transaction to go into the next mined Block
+
+        : param sender: <str> Adderess of the Recipient
+        """
+
+        transaction = {
+            'sender': sender,
+            'recipient': recipient,
+            'amount': amount
+        }
+
+        self.current_transactions.append(transaction)
+
+        return self.last_block['index'] + 1
 
 # Instantiate our Node
 app = Flask(__name__)
@@ -117,28 +134,50 @@ node_identifier = str(uuid4()).replace('-', '')
 # Instantiate the Blockchain
 blockchain = Blockchain()
 
+@app.route('/', methods=['GET'])
+def hello_world():
+    response = {
+        'text': 'hello world'
+    }
+    return jsonify(response), 200
 
-@app.route('/mine', methods=['GET', 'POST'])
+@app.route('/mine', methods=['POST'])
 def mine():
-    # Run the proof of work algorithm to get the next proof
-    proof = blockchain.proof_of_work(blockchain.last_block)
-
-    # Forge the new Block by adding it to the chain with the proof
-    new_block = blockchain.new_block(proof)
     data = request.get_json()
-
-    if proof is None or id is None:
+    
+    # Run the proof of work algorithm to get the next proof
+    # proof = blockchain.proof_of_work(blockchain.last_block)
+    if 'proof' not in data or 'id' not in data:
         response = {
-            'message': 'ERROR 400, missing either proof or id.'
+            'message': 'missing required property "proof/id".'
         }
         return jsonify(response), 400
- 
-    response = {
-        # TODO: Send a JSON response with the new block
-        'block': new_block
-    }
+    
+    # Forge the new Block by adding it to the chain with the proof
+    # new_block = blockchain.new_block(proof)
 
-    return jsonify(response), 200
+    proof = data['proof']
+    last_block = blockchain.last_block
+    block_string = json.dumps(last_block, sort_keys=True)
+
+    if blockchain.valid_proof(block_string, proof):
+        blockchain.new_transaction(
+            sender="0",recipient=data['id'],amount=1
+        )
+        # previous_hash = blockchain.hash(blockchain.last_block)
+        new_block = blockchain.new_block(proof)
+ 
+        response = {
+            # TODO: Send a JSON response with the new block
+            'block': new_block
+        }
+
+        return jsonify(response), 200
+    else:
+        response = {
+            'message': 'invalid proof'
+        }
+        return jsonify(response), 200
 
 
 @app.route('/chain', methods=['GET'])
@@ -151,10 +190,29 @@ def full_chain():
 
 @app.route('/last_block', methods=['GET'])
 def last_block():
+    last_block = blockchain.last_block
     response = {
-        'last_block': blockchain.last_block
+        'last_block': last_block
     }
 
+    return jsonify(response), 200
+
+@app.route('/transactions/new', methods=['POST'])
+def new_transaction():
+    data = request.get_json()
+
+    # Check for required fields in POST data
+    required = ['sender', 'recipient', 'data']
+
+    if 'recipient' not in data or 'amount' not in data or 'sender' not in data:
+        response = {
+            'message': 'missing required prop proof/id'
+        }
+        return jsonify(response), 400
+
+    # create new transaction
+    index = blockchain.new_transaction(data['sender'], data['recipient'], data['amount'])
+    response = {'message': f'Transaction will be posted in block with index {index}'}
     return jsonify(response), 200
 
 # Run the program on port 5000
